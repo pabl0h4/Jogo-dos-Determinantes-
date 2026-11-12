@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Jogo dos Determinantes</title>
+<style>
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);
+--bg:#f6f7fb;--card:#fff;--tx:#14182b;--mut:#555d78;--bd:#c9cee0;--pri:#1d4ed8;--pri-bg:#dbe6ff;--sec:#b45309;--sec-bg:#ffe8cc;--ok:#15803d;--ok-bg:#dcfce7;--er:#b91c1c;--er-bg:#fee2e2;color-scheme:light}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0f1220;--card:#1a1f35;--tx:#eef0fa;--mut:#a5adca;--bd:#3a4266;--pri:#8fb0ff;--pri-bg:#1e2f66;--sec:#ffb15c;--sec-bg:#4a2e0b;--ok:#6ee79a;--ok-bg:#12331f;--er:#ff9a9a;--er-bg:#431616;color-scheme:dark}}
+*,*:before,*:after{box-sizing:inherit}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--tx);font:18px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+main{max-width:720px;margin:0 auto;padding:16px}
+h1{font-size:1.5rem;margin:.2em 0}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:16px;margin:12px 0}
+.bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+button{font:inherit;min-height:44px;padding:8px 16px;border-radius:10px;border:2px solid var(--pri);background:var(--card);color:var(--tx);cursor:pointer}
+button[aria-pressed="true"],button.go{background:var(--pri);color:#fff}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) button[aria-pressed="true"],:root:not([data-theme="light"]) button.go{color:#0f1220}}
+button:focus-visible,input:focus-visible{outline:3px solid var(--sec);outline-offset:2px}
+.score{margin-left:auto;font-weight:700}
+.wrap{overflow-x:auto}
+.mat{position:relative;display:inline-grid;gap:4px 10px;padding:6px 14px;border-left:3px solid var(--tx);border-right:3px solid var(--tx);border-radius:8px;margin:8px 0;font-size:1.5rem;font-variant-numeric:tabular-nums}
+.c{min-width:2.6rem;text-align:center;padding:4px 6px;border-radius:8px;border:2px solid transparent}
+.c.ext{font-style:italic;color:var(--mut);background:repeating-linear-gradient(135deg,transparent 0 6px,var(--bd) 6px 7px);border:2px dashed var(--mut)}.c.ext1{margin-left:18px}.cap{font-size:.75rem;text-align:center;color:var(--mut);font-weight:700;line-height:1.2}.cap.ext1{margin-left:18px}
+.c.p{background:var(--pri-bg);border:2px solid var(--pri)}
+.c.s{background:var(--sec-bg);border:2px dashed var(--sec)}
+.legend{font-size:.9rem;color:var(--mut)}
+.step{padding:10px 12px;border-radius:10px;margin:8px 0;border:1px solid var(--bd)}
+.step.done{background:var(--ok-bg);border-color:var(--ok)}
+.step.cur{border:2px solid var(--pri)}
+.expr{font-size:1.2rem}
+input{font:inherit;width:6.5rem;min-height:44px;text-align:center;border:2px solid var(--bd);border-radius:10px;background:var(--bg);color:var(--tx);margin:0 6px}
+input.bad{border-color:var(--er);background:var(--er-bg)}
+.msg{margin-top:6px;font-weight:600;min-height:1.5em}
+.msg.ok{color:var(--ok)}.msg.er{color:var(--er)}
+.tag{display:inline-block;font-size:.8rem;padding:1px 8px;border-radius:99px;border:1px solid currentColor}
+.tag.p{color:var(--pri)}.tag.s{color:var(--sec)}
+.sr{position:absolute;left:-9999px}
+</style>
+</head>
+<body>
+<main>
+<h1>🎯 Jogo dos Determinantes</h1>
+<div class="card">
+  <div class="bar" role="group" aria-label="Escolha a ordem da matriz" id="lv"></div>
+  <div class="bar" style="margin-top:10px"><span class="score" id="score" aria-live="polite"></span></div>
+</div>
+<div class="card">
+  <div id="info" class="legend"></div>
+  <div class="wrap"><div id="mat" class="mat" role="img"></div></div>
+  <div class="legend" id="legend"></div>
+</div>
+<div id="steps"></div>
+<div id="live" class="sr" aria-live="assertive"></div>
+<div class="bar"><button id="next" class="go" hidden>Próxima matriz ▶</button></div>
+</main>
+<script>
+const LV=[[1,'1ª ordem'],[2,'2ª ordem'],[3,'3ª ordem'],[0,'Misto']];
+let mode=2,ord=2,M=[],E=[],steps=[],idx=0,tries=0,score=0,streak=0,done=0;
+const $=id=>document.getElementById(id);
+const rnd=(a,b)=>a+Math.floor(Math.random()*(b-a+1));
+const f=n=>n<0?'('+n+')':''+n;
+const sg=n=>n<0?'−'+(-n):''+n;
+function gen(){
+  ord=mode||rnd(1,3);
+  const lo=ord==3?-5:-9,hi=ord==3?6:9;
+  do{M=Array.from({length:ord},()=>Array.from({length:ord},()=>rnd(lo,hi)));}
+  while(M.flat().every(x=>x===0)||(ord>1&&M.flat().filter(x=>x===0).length>1));
+  E=M.map(r=>ord==3?[...r,r[0],r[1]]:[...r]);
+  steps=[];
+  const v=(cells)=>cells.map(([r,c])=>E[r][c]);
+  if(ord==1){steps.push({t:'Em uma matriz de 1ª ordem, o determinante é o próprio elemento.',lhs:'det(A) =',ans:M[0][0],cells:[[0,0]],k:'p'});}
+  if(ord==2){
+    steps.push({t:'Diagonal principal (↘): multiplique os elementos.',lhs:`${f(M[0][0])} × ${f(M[1][1])} =`,ans:M[0][0]*M[1][1],cells:[[0,0],[1,1]],k:'p'});
+    steps.push({t:'Diagonal secundária (↙): multiplique os elementos.',lhs:`${f(M[0][1])} × ${f(M[1][0])} =`,ans:M[0][1]*M[1][0],cells:[[0,1],[1,0]],k:'s'});
+    const a=M[0][0]*M[1][1],b=M[0][1]*M[1][0];
+    steps.push({t:'Subtraia: principal − secundária.',lhs:`det(A) = ${f(a)} − ${f(b)} =`,ans:a-b,cells:[],k:''});
+  }
+  if(ord==3){
+    const P=[],S=[];
+    for(let k=0;k<3;k++){P.push([0,1,2].map(i=>[i,k+i]));S.push([0,1,2].map(i=>[i,k+2-i]));}
+    const pv=[],sv=[];
+    P.forEach((c,i)=>{const x=v(c);pv.push(x[0]*x[1]*x[2]);steps.push({t:`Diagonal principal ${i+1} de 3 (↘): multiplique os três.`,lhs:`${x.map(f).join(' × ')} =`,ans:pv[i],cells:c,k:'p'});});
+    S.forEach((c,i)=>{const x=v(c);sv.push(x[0]*x[1]*x[2]);steps.push({t:`Diagonal secundária ${i+1} de 3 (↙): multiplique os três.`,lhs:`${x.map(f).join(' × ')} =`,ans:sv[i],cells:c,k:'s'});});
+    const sp=pv.reduce((a,b)=>a+b),ss=sv.reduce((a,b)=>a+b);
+    steps.push({t:'Some os produtos das diagonais principais.',lhs:`${pv.map(f).join(' + ')} =`,ans:sp,cells:[],groups:P,k:'p'});
+    steps.push({t:'Some os produtos das diagonais secundárias.',lhs:`${sv.map(f).join(' + ')} =`,ans:ss,cells:[],groups:S,k:'s'});
+    steps.push({t:'Subtraia: soma principal − soma secundária.',lhs:`det(A) = ${f(sp)} − ${f(ss)} =`,ans:sp-ss,cells:[],k:''});
+  }
+  steps.forEach(s=>{if(s.cells.length>1)s.groups=[s.cells]});
+  idx=0;tries=0;$('next').hidden=true;render();
+}
+function drawLines(cur){
+  const m=$('mat');
+  if(!cur||!cur.groups||!cur.groups.length)return;
+  const mr=m.getBoundingClientRect(),st=cur.k=='p'?'var(--pri)':'var(--sec)',many=cur.groups.length>1;
+  let s='<svg aria-hidden="true" style="position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none;overflow:visible">';
+  cur.groups.forEach(g=>{
+    const q=x=>m.querySelector(`[data-r="${x[0]}"][data-c="${x[1]}"]`).getBoundingClientRect();
+    const a=q(g[0]),b=q(g[g.length-1]);
+    let x1=a.left+a.width/2-mr.left,y1=a.top+a.height/2-mr.top,x2=b.left+b.width/2-mr.left,y2=b.top+b.height/2-mr.top;
+    const dx=x2-x1,dy=y2-y1;x1-=dx*.22;y1-=dy*.22;x2+=dx*.22;y2+=dy*.22;
+    s+=`<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" style="stroke:${st}" stroke-width="${many?3:4}" stroke-linecap="round" ${cur.k=='s'?'stroke-dasharray="10 6"':''} opacity="${many?.6:.75}"/>`;
+  });
+  m.insertAdjacentHTML('beforeend',s+'</svg>');
+}
+function drawMat(){
+  const n=ord,cols=ord==3?5:ord,cur=steps[idx];
+  const m=$('mat');m.style.gridTemplateColumns=`repeat(${cols},auto)`;
+  m.setAttribute('aria-label','Matriz '+M.map(r=>r.join(', ')).join(' ; '));
+  let h='';
+  if(ord==3)h+='<div class="cap" style="grid-column:1/4">matriz original</div><div class="cap ext1">↺ col. 1</div><div class="cap">↺ col. 2</div>';
+  for(let r=0;r<n;r++)for(let c=0;c<cols;c++){
+    const hl=cur&&cur.cells.some(x=>x[0]==r&&x[1]==c);
+    h+=`<div data-r="${r}" data-c="${c}" class="c${c>=n?' ext':''}${c==3?' ext1':''}${hl?' '+cur.k:''}">${sg(E[r][c])}</div>`;
+  }
+  m.innerHTML=h;
+  drawLines(cur);
+  $('info').textContent=ord==1?'Matriz de 1ª ordem':ord==2?'Matriz de 2ª ordem':'Matriz de 3ª ordem — regra de Sarrus: as colunas 1 e 2 são copiadas à direita (células tracejadas, em itálico)';
+  $('legend').innerHTML=ord>1?'<span class="tag p">↘ principal (borda contínua)</span> <span class="tag s">↙ secundária (borda tracejada)</span>':'';
+}
+function render(){
+  drawMat();
+  let h='';
+  steps.forEach((s,i)=>{
+    if(i<idx)h+=`<div class="step done"><div class="expr">✔ ${s.lhs} <b>${sg(s.ans)}</b></div></div>`;
+    else if(i==idx)h+=`<div class="step cur"><div>Passo ${i+1} de ${steps.length}: ${s.t}</div><form id="fm" class="expr" autocomplete="off"><label for="ans">${s.lhs}</label><input id="ans" inputmode="numeric" aria-describedby="msg"> <button class="go" type="submit">Conferir</button></form><div id="msg" class="msg" role="status"></div></div>`;
+  });
+  $('steps').innerHTML=h;
+  const fm=$('fm');
+  if(fm){fm.onsubmit=e=>{e.preventDefault();check();};$('ans').focus({preventScroll:false});}
+  $('score').textContent=`Pontos: ${score} · Sequência: ${streak} · Matrizes: ${done}`;
+}
+function check(){
+  const inp=$('ans'),raw=inp.value.trim().replace('−','-').replace(/\s/g,'');
+  const msg=$('msg');
+  if(!/^-?\d+$/.test(raw)){msg.className='msg er';msg.textContent='Digite um número inteiro (use - para negativos).';return;}
+  const s=steps[idx];
+  if(+raw===s.ans){
+    score+=tries==0?10:tries==1?5:2;if(tries==0)streak++;
+    $('live').textContent='Correto!';
+    idx++;tries=0;
+    if(idx>=steps.length){done++;render();$('steps').insertAdjacentHTML('beforeend',`<div class="step done"><b>🎉 Determinante = ${sg(s.ans)}. Matriz concluída!</b></div>`);$('next').hidden=false;$('next').focus();$('live').textContent='Matriz concluída! Determinante igual a '+s.ans;}
+    else render();
+  }else{
+    tries++;streak=0;$('score').textContent=`Pontos: ${score} · Sequência: 0 · Matrizes: ${done}`;
+    inp.classList.add('bad');inp.setAttribute('aria-invalid','true');
+    let t='✘ Errado, tente de novo.';
+    if(tries>=2)t+=' Dica: cuidado com os sinais — negativo × negativo = positivo.';
+    if(tries>=3)t+=` A resposta é ${sg(s.ans)}.`;
+    msg.className='msg er';msg.textContent=t;$('live').textContent='Errado. Tente de novo.';inp.select();
+  }
+}
+$('lv').innerHTML=LV.map(([v,l])=>`<button type="button" data-v="${v}" aria-pressed="${v===mode}">${l}</button>`).join('');
+$('lv').onclick=e=>{const b=e.target.closest('button');if(!b)return;mode=+b.dataset.v;[...$('lv').children].forEach(x=>x.setAttribute('aria-pressed',x===b));gen();};
+$('next').onclick=gen;
+window.addEventListener('resize',()=>{const m=$('mat'),o=m.querySelector('svg');if(o)o.remove();drawLines(steps[idx]);});
+gen();
+</script>
+</body>
+</html>
